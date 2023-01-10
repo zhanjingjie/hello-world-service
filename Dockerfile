@@ -1,14 +1,18 @@
-# Stage 1 of the multi-stage build. 
-# Build the Golang binary.
-FROM golang:1.15 AS builder
+# First Docker build stage (for local development). Install tools. Download Golang modules.
+FROM golang:1.19-alpine AS builder
+RUN go install github.com/cespare/reflex@latest
 WORKDIR /go/src/app
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# When there are go modules, uncomment these two lines.
+# COPY go.mod go.sum ./
+# RUN go mod download -x
 
-# Stage 2 of the multi-stage build.
-# Copy the binary into a much small image - alpine. For faster and more secure distribution.
+# Second Docker build stage. Use the Golang image to build the Golang binary.
+FROM builder AS binary
+COPY . .
+RUN go build -a -installsuffix -o main .
+
+# Third Docker build stage. Copy the binary into a much smaller image - alpine. For faster and more secure distribution.
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /go/src/app/ .
+COPY --from=binary /go/src/app/main .
 CMD ["./main"]
